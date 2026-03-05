@@ -1,0 +1,4 @@
+.goreview/
+/goreview
+*.exe
+openspec/
