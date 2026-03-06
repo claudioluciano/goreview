@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strconv"
 
+	lipgloss "charm.land/lipgloss/v2"
 	gitpkg "github.com/claudioluciano/goreview/internal/git"
+	"github.com/claudioluciano/goreview/internal/cli/styles"
 	reviewpkg "github.com/claudioluciano/goreview/internal/review"
 	"github.com/claudioluciano/goreview/internal/storage"
 	"github.com/spf13/cobra"
@@ -30,11 +32,16 @@ func newReviewCmd() *cobra.Command {
 			}
 
 			if err := storage.EnsureGitignore(app.repo.Path()); err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not update .gitignore: %v\n", err)
+				lipgloss.Fprintf(cmd.ErrOrStderr(), "%s %v\n",
+					styles.Warning.Render("warn:"), err)
 			}
 
 			if discard != "" {
-				return app.engine.Discard(discard)
+				if err := app.engine.Discard(discard); err != nil {
+					return err
+				}
+				lipgloss.Println(styles.Success.Render("Discarded review: " + discard))
+				return nil
 			}
 
 			if resume != "" {
@@ -42,7 +49,10 @@ func newReviewCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				fmt.Printf("Resumed review: %s (%d comments)\n", r.ID, len(r.Comments))
+				lipgloss.Printf("%s %s %s\n",
+					styles.Success.Render("Resumed"),
+					styles.Bold.Render(r.ID),
+					styles.Faint.Render(fmt.Sprintf("(%d comments)", len(r.Comments))))
 				return nil
 			}
 
@@ -52,12 +62,10 @@ func newReviewCmd() *cobra.Command {
 
 			target := args[0]
 
-			// Try as PR number
 			if prNum, err := strconv.Atoi(target); err == nil {
 				return startPRReview(app, prNum, walk, useTUI)
 			}
 
-			// Try as branch range
 			base, head, ok := gitpkg.ParseRefRange(target)
 			if !ok {
 				return fmt.Errorf("invalid target: %s (use PR number or base..head)", target)
@@ -92,15 +100,25 @@ func startPRReview(app *appContext, prNum int, walk, tui bool) error {
 		return err
 	}
 
-	fmt.Printf("Review started: %s (PR #%d: %s)\n", r.ID, pr.Number, pr.Title)
-	fmt.Printf("  %s → %s\n", pr.Head, pr.Base)
+	lipgloss.Println()
+	lipgloss.Printf("  %s %s\n",
+		styles.Badge(fmt.Sprintf("PR #%d", pr.Number), styles.PRBadge),
+		styles.Bold.Render(pr.Title))
+	lipgloss.Printf("  %s %s %s\n",
+		styles.Info.Render(pr.Head),
+		styles.Faint.Render("->"),
+		pr.Base)
+	lipgloss.Printf("  %s  %s\n",
+		styles.StatBar(pr.Additions, pr.Deletions),
+		styles.Faint.Render("id:"+r.ID))
+	lipgloss.Println()
 
 	if walk {
-		return runWalkMode(app, r)
+		return runWalkTUI(app, r)
 	}
 
 	if tui {
-		fmt.Println("TUI mode not yet implemented")
+		return runWalkTUI(app, r)
 	}
 
 	return nil
@@ -113,10 +131,17 @@ func startBranchReview(app *appContext, base, head string, walk bool) error {
 		return err
 	}
 
-	fmt.Printf("Review started: %s\n", r.ID)
+	lipgloss.Println()
+	lipgloss.Printf("  %s %s %s %s\n",
+		styles.Success.Render("Review started"),
+		styles.Info.Render(head),
+		styles.Faint.Render("->"),
+		base)
+	lipgloss.Printf("  %s\n", styles.Faint.Render("id:"+r.ID))
+	lipgloss.Println()
 
 	if walk {
-		return runWalkMode(app, r)
+		return runWalkTUI(app, r)
 	}
 
 	return nil

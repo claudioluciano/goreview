@@ -97,6 +97,26 @@ func (r *Repo) DiffTrees(baseRef, headRef string) (*object.Patch, error) {
 	return baseTree.Patch(headTree)
 }
 
+func (r *Repo) FileContent(ref, path string) (string, error) {
+	hash, err := r.ResolveRef(ref)
+	if err != nil {
+		return "", err
+	}
+	commit, err := r.repo.CommitObject(*hash)
+	if err != nil {
+		return "", fmt.Errorf("get commit: %w", err)
+	}
+	tree, err := commit.Tree()
+	if err != nil {
+		return "", fmt.Errorf("get tree: %w", err)
+	}
+	f, err := tree.File(path)
+	if err != nil {
+		return "", fmt.Errorf("get file %s: %w", path, err)
+	}
+	return f.Contents()
+}
+
 func (r *Repo) RemoteURL(name string) (string, error) {
 	remote, err := r.repo.Remote(name)
 	if err != nil {
