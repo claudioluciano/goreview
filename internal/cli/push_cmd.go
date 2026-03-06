@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	lipgloss "charm.land/lipgloss/v2"
+	"github.com/claudioluciano/goreview/internal/cli/styles"
 	"github.com/claudioluciano/goreview/internal/core"
 	"github.com/spf13/cobra"
 )
@@ -43,7 +45,11 @@ func newPushCmd() *cobra.Command {
 			case commentOnly:
 				verdict = core.VerdictComment
 			default:
-				fmt.Println("No verdict specified. Use --approve, --request-changes, or --comment")
+				lipgloss.Printf("%s Use %s, %s, or %s\n",
+					styles.Warning.Render("No verdict specified."),
+					styles.Bold.Render("--approve"),
+					styles.Bold.Render("--request-changes"),
+					styles.Bold.Render("--comment"))
 				return nil
 			}
 
@@ -66,7 +72,24 @@ func newPushCmd() *cobra.Command {
 				return fmt.Errorf("update local status: %w", err)
 			}
 
-			fmt.Printf("Review published for PR #%d (%s)\n", r.PR, verdict)
+			verdictStyle := styles.Success
+			verdictLabel := string(verdict)
+			switch verdict {
+			case core.VerdictApprove:
+				verdictStyle = styles.Success
+				verdictLabel = "approved"
+			case core.VerdictRequestChanges:
+				verdictStyle = styles.Error
+				verdictLabel = "changes requested"
+			case core.VerdictComment:
+				verdictStyle = styles.Info
+				verdictLabel = "commented"
+			}
+
+			lipgloss.Printf("\n  %s %s %s\n\n",
+				verdictStyle.Render(verdictLabel),
+				styles.Faint.Render("on"),
+				styles.Bold.Render(fmt.Sprintf("PR #%d", r.PR)))
 			return nil
 		},
 	}

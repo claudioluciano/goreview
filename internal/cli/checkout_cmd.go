@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 
+	lipgloss "charm.land/lipgloss/v2"
+	"github.com/claudioluciano/goreview/internal/cli/styles"
 	gitpkg "github.com/claudioluciano/goreview/internal/git"
 	reviewpkg "github.com/claudioluciano/goreview/internal/review"
 	"github.com/spf13/cobra"
@@ -32,7 +34,8 @@ func newCheckoutCmd() *cobra.Command {
 
 			if clean {
 				gitpkg.RemoveWorktree(app.repo.Path(), reviewID)
-				fmt.Printf("Removed worktree for PR #%d\n", prNum)
+				lipgloss.Println(styles.Success.Render(
+					fmt.Sprintf("Removed worktree for PR #%d", prNum)))
 				return nil
 			}
 
@@ -51,7 +54,9 @@ func newCheckoutCmd() *cobra.Command {
 				return err
 			}
 
-			fmt.Printf("Worktree created at: %s\n", path)
+			lipgloss.Printf("%s %s\n",
+				styles.Success.Render("Worktree created at:"),
+				styles.Info.Render(path))
 			return nil
 		},
 	}

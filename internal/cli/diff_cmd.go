@@ -6,7 +6,9 @@ import (
 	"os/exec"
 	"strings"
 
+	lipgloss "charm.land/lipgloss/v2"
 	"github.com/mattn/go-isatty"
+	"github.com/claudioluciano/goreview/internal/cli/styles"
 	"github.com/claudioluciano/goreview/internal/core"
 	diffpkg "github.com/claudioluciano/goreview/internal/diff"
 	"github.com/spf13/cobra"
@@ -40,7 +42,6 @@ func newDiffCmd() *cobra.Command {
 				return printStat(diffs)
 			}
 
-			// Filter to single file if specified
 			if len(args) > 0 {
 				fd := diffpkg.FilterFile(diffs, args[0])
 				if fd == nil {
@@ -55,7 +56,7 @@ func newDiffCmd() *cobra.Command {
 				return pagerOutput(output)
 			}
 
-			fmt.Print(stripColors(output))
+			lipgloss.Print(output)
 			return nil
 		},
 	}
@@ -68,12 +69,20 @@ func newDiffCmd() *cobra.Command {
 func printStat(diffs []core.FileDiff) error {
 	stats := diffpkg.Stat(diffs)
 	totalAdd, totalDel := 0, 0
+
+	lipgloss.Println()
 	for _, s := range stats {
-		fmt.Printf("  %-50s | +%-4d -%d\n", s.File, s.Additions, s.Deletions)
+		name := styles.Bold.Render(fmt.Sprintf("%-50s", s.File))
+		bar := styles.StatBar(s.Additions, s.Deletions)
+		lipgloss.Printf("  %s %s\n", name, bar)
 		totalAdd += s.Additions
 		totalDel += s.Deletions
 	}
-	fmt.Printf("  %d files changed, +%d -%d\n", len(stats), totalAdd, totalDel)
+	lipgloss.Println(styles.Separator())
+	lipgloss.Printf("  %s  %s\n",
+		styles.Faint.Render(fmt.Sprintf("%d files changed", len(stats))),
+		styles.StatBar(totalAdd, totalDel))
+	lipgloss.Println()
 	return nil
 }
 
@@ -81,18 +90,41 @@ func renderDiffs(diffs []core.FileDiff) string {
 	var b strings.Builder
 	for _, d := range diffs {
 		name := diffpkg.FileName(d)
-		b.WriteString(fmt.Sprintf("\033[1m── %s ──\033[0m\n", name))
+
+		label := ""
+		switch {
+		case d.IsNew:
+			label = styles.Added.Render(" (new)")
+		case d.IsDeleted:
+			label = styles.Removed.Render(" (deleted)")
+		case d.IsRenamed:
+			label = styles.Warning.Render(fmt.Sprintf(" (renamed from %s)", d.OldName))
+		}
+
+		b.WriteString(styles.FileHdr.Render(" "+name+label) + "\n")
+
+		if d.IsBinary {
+			b.WriteString(styles.Faint.Render("  binary file") + "\n\n")
+			continue
+		}
+
 		for _, h := range d.Hunks {
-			b.WriteString(fmt.Sprintf("\033[36m%s\033[0m\n", h.Header))
+			b.WriteString(styles.HunkHdr.Render("  "+h.Header) + "\n")
 			for _, l := range h.Lines {
 				highlighted := diffpkg.HighlightLine(l, name)
 				switch l.Kind {
 				case core.LineAdded:
-					b.WriteString(fmt.Sprintf("\033[32m%4d+ %s\033[0m\n", l.NewNum, highlighted))
+					lineNo := styles.LineNum.Render(fmt.Sprintf("%d", l.NewNum))
+					gutter := styles.Added.Render("+")
+					b.WriteString(fmt.Sprintf("  %s %s %s\n", lineNo, gutter, highlighted))
 				case core.LineRemoved:
-					b.WriteString(fmt.Sprintf("\033[31m%4d- %s\033[0m\n", l.OldNum, highlighted))
+					lineNo := styles.LineNum.Render(fmt.Sprintf("%d", l.OldNum))
+					gutter := styles.Removed.Render("-")
+					b.WriteString(fmt.Sprintf("  %s %s %s\n", lineNo, gutter, highlighted))
 				case core.LineContext:
-					b.WriteString(fmt.Sprintf("%4d  %s\n", l.NewNum, highlighted))
+					lineNo := styles.LineNum.Render(fmt.Sprintf("%d", l.NewNum))
+					gutter := styles.Faint.Render(" ")
+					b.WriteString(fmt.Sprintf("  %s %s %s\n", lineNo, gutter, highlighted))
 				}
 			}
 		}
@@ -115,16 +147,14 @@ func pagerOutput(content string) error {
 }
 
 func stripColors(s string) string {
-	// Simple ANSI escape stripper
 	result := strings.Builder{}
 	i := 0
 	for i < len(s) {
 		if s[i] == '\033' {
-			// Skip until 'm'
 			for i < len(s) && s[i] != 'm' {
 				i++
 			}
-			i++ // skip 'm'
+			i++
 		} else {
 			result.WriteByte(s[i])
 			i++
@@ -143,7 +173,6 @@ func getActiveReview(app *appContext) (*core.Review, error) {
 		return nil, fmt.Errorf("no active reviews — start one with: goreview review <target>")
 	}
 
-	// Return most recently updated
 	latest := reviews[0]
 	for _, r := range reviews[1:] {
 		if r.UpdatedAt.After(latest.UpdatedAt) {

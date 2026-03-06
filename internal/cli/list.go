@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"os"
 
+	lipgloss "charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
+	"github.com/claudioluciano/goreview/internal/cli/styles"
 	"github.com/claudioluciano/goreview/internal/platform"
 	"github.com/spf13/cobra"
 )
@@ -46,20 +49,41 @@ func newListCmd() *cobra.Command {
 			}
 
 			if len(prs) == 0 {
-				fmt.Println("No open PRs found")
+				lipgloss.Println(styles.Faint.Render("No open PRs found"))
 				return nil
 			}
 
+			t := table.New().
+				Headers("#", "TITLE", "BRANCH", "CHANGES", "STATUS").
+				BorderStyle(lipgloss.NewStyle().Foreground(styles.Subtle)).
+				StyleFunc(func(row, col int) lipgloss.Style {
+					s := lipgloss.NewStyle().Padding(0, 1)
+					if row == table.HeaderRow {
+						return s.Bold(true).Foreground(styles.Blue)
+					}
+					return s.Foreground(styles.Text)
+				})
+
 			for _, pr := range prs {
-				draftLabel := ""
+				status := ""
 				if pr.Draft {
-					draftLabel = " (draft)"
+					status = styles.Badge("draft", styles.DraftBadge)
 				}
-				fmt.Printf("  #%-4d %-40s %s → %s  +%d -%d  %d comments%s\n",
-					pr.Number, pr.Title, pr.Head, pr.Base,
-					pr.Additions, pr.Deletions, pr.Comments, draftLabel)
+				comments := ""
+				if pr.Comments > 0 {
+					comments = styles.Faint.Render(fmt.Sprintf("%d comments", pr.Comments))
+				}
+
+				t.Row(
+					fmt.Sprintf("%d", pr.Number),
+					truncate(pr.Title, 40),
+					styles.Info.Render(pr.Head)+styles.Faint.Render(" -> ")+pr.Base,
+					styles.StatBar(pr.Additions, pr.Deletions),
+					joinNonEmpty(" ", status, comments),
+				)
 			}
 
+			lipgloss.Println(t)
 			return nil
 		},
 	}
@@ -69,4 +93,28 @@ func newListCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Output as JSON")
 
 	return cmd
+}
+
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max-1] + "…"
+}
+
+func joinNonEmpty(sep string, parts ...string) string {
+	var result []string
+	for _, p := range parts {
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	if len(result) == 0 {
+		return ""
+	}
+	out := result[0]
+	for _, p := range result[1:] {
+		out += sep + p
+	}
+	return out
 }

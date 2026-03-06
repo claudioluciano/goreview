@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	lipgloss "charm.land/lipgloss/v2"
+	"github.com/claudioluciano/goreview/internal/cli/styles"
 	"github.com/claudioluciano/goreview/internal/core"
 	diffpkg "github.com/claudioluciano/goreview/internal/diff"
 )
@@ -22,25 +24,37 @@ func runWalkMode(app *appContext, r *core.Review) error {
 
 	for i, d := range diffs {
 		name := diffpkg.FileName(d)
-		fmt.Printf("\n\033[1m── %s (%d/%d) ──\033[0m\n\n", name, i+1, len(diffs))
+
+		lipgloss.Println()
+		lipgloss.Printf("  %s %s\n",
+			styles.FileHdr.Render(" "+name+" "),
+			styles.FileNum.Render(fmt.Sprintf("(%d/%d)", i+1, len(diffs))))
+		lipgloss.Println()
 
 		for _, h := range d.Hunks {
-			fmt.Printf("\033[36m%s\033[0m\n", h.Header)
+			lipgloss.Printf("  %s\n", styles.HunkHdr.Render(h.Header))
 			for _, l := range h.Lines {
 				highlighted := diffpkg.HighlightLine(l, name)
 				switch l.Kind {
 				case core.LineAdded:
-					fmt.Printf("\033[32m%4d+ %s\033[0m\n", l.NewNum, highlighted)
+					lineNo := styles.LineNum.Render(fmt.Sprintf("%d", l.NewNum))
+					gutter := styles.Added.Render("+")
+					lipgloss.Printf("  %s %s %s\n", lineNo, gutter, highlighted)
 				case core.LineRemoved:
-					fmt.Printf("\033[31m%4d- %s\033[0m\n", l.OldNum, highlighted)
+					lineNo := styles.LineNum.Render(fmt.Sprintf("%d", l.OldNum))
+					gutter := styles.Removed.Render("-")
+					lipgloss.Printf("  %s %s %s\n", lineNo, gutter, highlighted)
 				case core.LineContext:
-					fmt.Printf("%4d  %s\n", l.NewNum, highlighted)
+					lineNo := styles.LineNum.Render(fmt.Sprintf("%d", l.NewNum))
+					gutter := styles.Faint.Render(" ")
+					lipgloss.Printf("  %s %s %s\n", lineNo, gutter, highlighted)
 				}
 			}
 		}
 
 		for {
-			fmt.Print("\n> (l)ine comment, (s)kip file, (q)uit: ")
+			lipgloss.Printf("\n  %s ",
+				styles.Prompt.Render("[l]ine comment  [s]kip  [q]uit >"))
 			input, err := reader.ReadString('\n')
 			if err != nil {
 				return nil
@@ -52,25 +66,29 @@ func runWalkMode(app *appContext, r *core.Review) error {
 				app.engine.SetFileStatus(r, name, core.FileSkipped)
 				goto nextFile
 			case "q":
-				fmt.Printf("\nWalk ended. %d comments saved.\n", len(r.Comments))
+				lipgloss.Printf("\n  %s %s\n\n",
+					styles.Success.Render("Walk ended."),
+					styles.Faint.Render(fmt.Sprintf("%d comments saved.", len(r.Comments))))
 				return nil
 			case "l":
 				if err := walkComment(app, r, name, reader); err != nil {
-					fmt.Fprintf(os.Stderr, "error: %v\n", err)
+					lipgloss.Fprintln(os.Stderr, styles.Error.Render("error: "+err.Error()))
 				}
 			default:
-				fmt.Println("Invalid option. Use (l)ine comment, (s)kip, or (q)uit.")
+				lipgloss.Println(styles.Warning.Render("  Use [l]ine comment, [s]kip, or [q]uit"))
 			}
 		}
 	nextFile:
 	}
 
-	fmt.Printf("\nWalk complete. %d comments saved.\n", len(r.Comments))
+	lipgloss.Printf("\n  %s %s\n\n",
+		styles.Success.Render("Walk complete."),
+		styles.Faint.Render(fmt.Sprintf("%d comments saved.", len(r.Comments))))
 	return nil
 }
 
 func walkComment(app *appContext, r *core.Review, file string, reader *bufio.Reader) error {
-	fmt.Print("> Line or range (e.g. 14 or 14-20): ")
+	lipgloss.Printf("  %s ", styles.Prompt.Render("Line or range (e.g. 14 or 14-20) >"))
 	lineInput, err := reader.ReadString('\n')
 	if err != nil {
 		return err
@@ -95,19 +113,20 @@ func walkComment(app *appContext, r *core.Review, file string, reader *bufio.Rea
 		endLine = startLine
 	}
 
-	fmt.Print("> Type (comment/blocking/nitpick/praise/question) [comment]: ")
+	lipgloss.Printf("  %s ",
+		styles.Prompt.Render("Type [comment/blocking/nitpick/praise/question] >"))
 	typeInput, _ := reader.ReadString('\n')
 	typeInput = strings.TrimSpace(typeInput)
 	if typeInput == "" {
 		typeInput = "comment"
 	}
 
-	fmt.Print("> Comment: ")
+	lipgloss.Printf("  %s ", styles.Prompt.Render("Comment >"))
 	body, _ := reader.ReadString('\n')
 	body = strings.TrimSpace(body)
 
 	if body == "" {
-		fmt.Println("Empty comment, skipped.")
+		lipgloss.Println(styles.Faint.Render("  Empty comment, skipped."))
 		return nil
 	}
 
@@ -115,6 +134,9 @@ func walkComment(app *appContext, r *core.Review, file string, reader *bufio.Rea
 		return err
 	}
 
-	fmt.Println("Added.")
+	lipgloss.Printf("  %s %s at %s\n",
+		styles.Success.Render("Added"),
+		styles.CommentTypeBadge(typeInput),
+		styles.Info.Render(fmt.Sprintf("%s:%d", file, startLine)))
 	return nil
 }

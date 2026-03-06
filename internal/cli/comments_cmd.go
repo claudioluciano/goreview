@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	lipgloss "charm.land/lipgloss/v2"
+	"github.com/claudioluciano/goreview/internal/cli/styles"
 	"github.com/spf13/cobra"
 )
 
@@ -29,7 +31,7 @@ func newCommentsCmd() *cobra.Command {
 			}
 
 			if count {
-				fmt.Println(len(r.Comments))
+				lipgloss.Println(len(r.Comments))
 				return nil
 			}
 
@@ -40,11 +42,10 @@ func newCommentsCmd() *cobra.Command {
 			}
 
 			if len(r.Comments) == 0 {
-				fmt.Println("No comments yet")
+				lipgloss.Println(styles.Faint.Render("No comments yet"))
 				return nil
 			}
 
-			// Group by file
 			grouped := make(map[string][]int)
 			var order []string
 			for i, c := range r.Comments {
@@ -55,20 +56,23 @@ func newCommentsCmd() *cobra.Command {
 			}
 
 			for _, file := range order {
-				fmt.Printf("  %s\n", file)
+				lipgloss.Printf("\n  %s\n", styles.Header.Render(file))
 				for _, i := range grouped[file] {
 					c := r.Comments[i]
 					lineSpec := fmt.Sprintf("L%d", c.StartLine)
 					if c.StartLine != c.EndLine {
 						lineSpec = fmt.Sprintf("L%d-%d", c.StartLine, c.EndLine)
 					}
-					typeLabel := ""
-					if c.Type != "comment" {
-						typeLabel = fmt.Sprintf("[%s] ", c.Type)
-					}
-					fmt.Printf("    %d. %s: %s%s\n", i+1, lineSpec, typeLabel, c.Body)
+
+					badge := styles.CommentTypeBadge(string(c.Type))
+					lipgloss.Printf("    %s %s %s %s\n",
+						styles.Faint.Render(fmt.Sprintf("%d.", i+1)),
+						styles.Info.Render(lineSpec),
+						badge,
+						c.Body)
 				}
 			}
+			lipgloss.Println()
 
 			return nil
 		},

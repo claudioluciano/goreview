@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	lipgloss "charm.land/lipgloss/v2"
+	"github.com/claudioluciano/goreview/internal/cli/styles"
 	"github.com/claudioluciano/goreview/internal/core"
 	"github.com/spf13/cobra"
 )
@@ -34,11 +36,19 @@ func newCommentCmd() *cobra.Command {
 				if len(args) < 1 {
 					return fmt.Errorf("usage: goreview comment --edit <n> <new body>")
 				}
-				return app.engine.EditComment(r, edit-1, strings.Join(args, " "))
+				if err := app.engine.EditComment(r, edit-1, strings.Join(args, " ")); err != nil {
+					return err
+				}
+				lipgloss.Println(styles.Success.Render("Comment updated"))
+				return nil
 			}
 
 			if delete >= 0 {
-				return app.engine.DeleteComment(r, delete-1)
+				if err := app.engine.DeleteComment(r, delete-1); err != nil {
+					return err
+				}
+				lipgloss.Println(styles.Success.Render("Comment deleted"))
+				return nil
 			}
 
 			if len(args) < 2 {
@@ -53,7 +63,16 @@ func newCommentCmd() *cobra.Command {
 			body := strings.Join(args[1:], " ")
 			ct := core.CommentType(commentType)
 
-			return app.engine.AddComment(r, file, startLine, endLine, ct, body)
+			if err := app.engine.AddComment(r, file, startLine, endLine, ct, body); err != nil {
+				return err
+			}
+
+			lipgloss.Printf("%s %s %s %s\n",
+				styles.Success.Render("Added"),
+				styles.CommentTypeBadge(commentType),
+				styles.Faint.Render("at"),
+				styles.Info.Render(args[0]))
+			return nil
 		},
 	}
 

@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	lipgloss "charm.land/lipgloss/v2"
+	"github.com/claudioluciano/goreview/internal/cli/styles"
 	"github.com/claudioluciano/goreview/internal/platform"
 	"github.com/spf13/cobra"
 )
@@ -24,7 +26,7 @@ func newAuthCmd() *cobra.Command {
 			}
 
 			if token == "" {
-				fmt.Printf("Enter token for %s: ", pt)
+				lipgloss.Print(styles.Prompt.Render("Enter token for "+string(pt)+": ") + " ")
 				reader := bufio.NewReader(os.Stdin)
 				input, err := reader.ReadString('\n')
 				if err != nil {
@@ -53,7 +55,7 @@ func newAuthCmd() *cobra.Command {
 				return fmt.Errorf("save auth: %w", err)
 			}
 
-			fmt.Printf("Token saved for %s\n", pt)
+			lipgloss.Println(styles.Success.Render("Token saved for " + string(pt)))
 			return nil
 		},
 	}
